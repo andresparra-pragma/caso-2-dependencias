@@ -1,0 +1,7 @@
+* text=auto
+# El wrapper de Maven debe conservar LF para correr en Linux/macOS (y en GitHub Actions)
+mvnw text eol=lf
+*.sh text eol=lf
+# Scripts de Windows con CRLF
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

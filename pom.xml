@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>co.pragma.talk</groupId>
+    <artifactId>caso-2-dependencias</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+    <name>Caso 2 - Dependencias vulnerables + CI Gate</name>
+    <description>
+        Demo PragmaTalk: un proyecto sin código propio malo, pero con dependencias vulnerables.
+        OWASP Dependency-Check las detecta y el CI Gate falla el build con CVSS &gt;= 7.
+        ⚠ Proyecto SOLO para escaneo: no tiene código que ejecute estas librerías. No usar estas versiones.
+    </description>
+
+    <properties>
+        <maven.compiler.release>17</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Versiones VULNERABLES a propósito (ver perfil "corregido" más abajo) -->
+        <!-- log4j-core 2.14.1: Log4Shell, CVE-2021-44228, CVSS 10.0 -->
+        <log4j.version>2.14.1</log4j.version>
+        <!-- spring-data-jpa 3.1.11: el ejemplo de mvnrepository de la charla (CVE heredados de transitivas) -->
+        <spring-data-jpa.version>3.1.11</spring-data-jpa.version>
+
+        <!-- CI Gate: CVSS a partir del cual el build falla (se puede cambiar con -DfailBuildOnCVSS=N) -->
+        <failBuildOnCVSS>7</failBuildOnCVSS>
+        <dependency-check.version>13.0.0</dependency-check.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>${log4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-jpa</artifactId>
+            <version>${spring-data-jpa.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>${dependency-check.version}</version>
+                <configuration>
+                    <formats>
+                        <format>HTML</format>
+                        <format>JSON</format>
+                    </formats>
+                    <!-- API key gratuita de la NVD (opcional, pero acelera muchísimo la descarga):
+                         se pasa por línea de comando con -DnvdApiKey=TU_KEY. No se configura aquí
+                         porque una key vacía hace fallar el análisis. -->
+                    <!-- Solo nos interesa el análisis Java; evita que intente analizar otros ecosistemas -->
+                    <assemblyAnalyzerEnabled>false</assemblyAnalyzerEnabled>
+                    <nodeAuditAnalyzerEnabled>false</nodeAuditAnalyzerEnabled>
+                    <!-- OSS Index ahora exige cuenta; usamos solo la NVD -->
+                    <ossIndexAnalyzerEnabled>false</ossIndexAnalyzerEnabled>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- La corrección: actualizar. mvnw -Pcorregido dependency-check:check -->
+        <profile>
+            <id>corregido</id>
+            <properties>
+                <log4j.version>2.26.1</log4j.version>
+                <spring-data-jpa.version>3.5.13</spring-data-jpa.version>
+            </properties>
+        </profile>
+    </profiles>
+</project>
