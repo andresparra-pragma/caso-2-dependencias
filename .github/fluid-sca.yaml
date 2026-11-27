@@ -1,0 +1,11 @@
+# Configuración del escáner SCA de Fluid Attacks (fluidattacks/sca-action)
+language: ES
+# strict: el escáner sale con código 1 si encuentra vulnerabilidades.
+# La acción convierte ese código en el output "vulnerabilities_found" y el workflow decide si falla.
+strict: true
+output:
+  file_path: .fluidattacks-sca-results.sarif
+  format: SARIF
+sca:
+  include:
+    - .

@@ -67,10 +67,16 @@ Trivy lee las versiones por defecto del `pom.xml` (no activa perfiles): para ver
 |---|---|---|
 | Trivy · versiones del repo | ❌ falla | Encuentra Log4Shell y los demás hallazgos HIGH/CRITICAL: el gate detiene el pipeline. |
 | Trivy · versiones corregidas | ✅ pasa | Mismo proyecto con `log4j-core 2.26.1` y `spring-data-jpa 3.5.13`: 0 hallazgos. |
-| OWASP Dependency-Check | ❌ falla | CVSS ≥ 7. Solo corre a mano y necesita el secreto `NVD_API_KEY` (*Settings → Secrets and variables → Actions*). |
+| Fluid Attacks SCA | ❌ falla | Escáner open source de [Fluid Attacks](https://github.com/fluidattacks/sca-action), sin cuenta ni API key. Publica los hallazgos en la pestaña **Security → Code scanning**. |
+| OWASP Dependency-Check | ❌ falla | CVSS ≥ 7. Necesita el secreto `NVD_API_KEY` (*Settings → Secrets and variables → Actions*). |
 
 **Un job en rojo aquí no es un error del workflow: es el gate haciendo su trabajo.** El par rojo/verde muestra el
 antes y el después de actualizar las dependencias.
+
+Sobre Fluid Attacks: en la versión 1.2.0, `fluidattacks/sca-action` **reporta pero no hace fallar el job**. Con
+`strict: true` en [`.github/fluid-sca.yaml`](.github/fluid-sca.yaml) el escáner marca el output `vulnerabilities_found`,
+y un paso explícito del workflow lo convierte en el gate. La acción corre sin autenticar: no está conectada a ningún
+grupo de la plataforma de Fluid Attacks.
 
 ## 5. El gate en un pull request: no se puede hacer merge
 

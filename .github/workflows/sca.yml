@@ -48,6 +48,37 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "1"
 
+  fluid-sca:
+    name: "Fluid Attacks SCA · versiones del repo (debe fallar ❌)"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # para publicar los hallazgos en la pestaña Security
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Escanear dependencias con Fluid Attacks (open source, sin cuenta)
+        id: scan
+        # Fijada por SHA y no por etiqueta: una etiqueta se puede mover, un commit no.
+        # Modo completo (por defecto): no usa la acción de terceros que la versión diff necesita.
+        uses: fluidattacks/sca-action@4041124e360b62f382a16d552b8c71b1913aa249 # 1.2.0
+        with:
+          scan_config_path: .github/fluid-sca.yaml
+
+      - name: Publicar hallazgos en la pestaña Security
+        if: always() && steps.scan.outputs.sarif_file != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ${{ steps.scan.outputs.sarif_file }}
+          category: fluid-attacks-sca
+
+      # En la versión 1.2.0 la acción reporta pero no falla: el gate lo hace este paso.
+      - name: CI Gate (falla si hay dependencias vulnerables)
+        if: steps.scan.outputs.vulnerabilities_found == 'true'
+        run: |
+          echo "::error::Fluid Attacks encontró dependencias vulnerables. Detalle en la pestaña Security (Code scanning)."
+          exit 1
+
   dependency-check:
     name: OWASP Dependency-Check (CVSS >= 7)
     runs-on: ubuntu-latest
