@@ -61,7 +61,7 @@ Trivy lee las versiones por defecto del `pom.xml` (no activa perfiles): para ver
 ## 4. El gate en GitHub Actions
 
 [`.github/workflows/sca.yml`](.github/workflows/sca.yml) corre el mismo escaneo en el pipeline. Se ejecuta a mano
-(**Actions → SCA → Run workflow**) y en cada pull request:
+(**Actions → SCA → Run workflow**):
 
 | Job | Resultado esperado | Por qué |
 |---|---|---|
@@ -71,5 +71,39 @@ Trivy lee las versiones por defecto del `pom.xml` (no activa perfiles): para ver
 
 **Un job en rojo aquí no es un error del workflow: es el gate haciendo su trabajo.** El par rojo/verde muestra el
 antes y el después de actualizar las dependencias.
+
+## 5. El gate en un pull request: no se puede hacer merge
+
+[`.github/workflows/pr-gate.yml`](.github/workflows/pr-gate.yml) corre **Dependency Review** de GitHub en cada PR
+hacia `main`. Revisa **solo las dependencias que el PR agrega o cambia** (no lo que ya había en `main`): si alguna
+tiene una vulnerabilidad HIGH o CRITICAL, el check falla y deja un comentario en el PR con los CVE.
+
+### Configuración (una sola vez, en GitHub)
+
+1. El repo debe ser **público**. En repos privados, Dependency Review necesita GitHub Advanced Security, y las reglas
+   de protección de rama necesitan un plan pago.
+2. Verifica que el **dependency graph** esté activo: *Settings → Code security → Dependency graph*. En los repos
+   públicos viene activo.
+3. Abre un primer PR (el de abajo) para que el check **Dependency Review** aparezca al menos una vez.
+4. Protege `main`: *Settings → Branches → Add branch ruleset* (o *Add classic branch protection rule*) →
+   *Require status checks to pass* → agrega **Dependency Review**. Desde ahí, un PR con ese check en rojo no se puede
+   mergear.
+
+### La prueba: rama `feature/plantillas-notificaciones`
+
+La rama agrega una funcionalidad real (plantillas para las notificaciones a los afiliados) que usa
+`org.apache.commons:commons-text` **1.9**. Esa versión tiene **Text4Shell (CVE-2022-42889, CVSS 9.8)**: igual que
+Log4Shell, una interpolación de texto que puede terminar ejecutando código.
+
+```bash
+git push -u origin feature/plantillas-notificaciones
+```
+
+En GitHub, abre el PR hacia `main`:
+
+1. **Dependency Review** falla ❌ y comenta en el PR: `commons-text 1.9` → CVE-2022-42889 (critical).
+2. El botón de merge queda bloqueado por la regla de la rama.
+3. La corrección, en la misma rama: cambia la versión a `1.15.0` en el `pom.xml`, haz commit y push.
+4. El check vuelve a correr, pasa ✅ y el merge se habilita.
 
 Requisitos para correrlo en local: **Java 17+** (el proyecto trae el Maven Wrapper) y, para la opción B, Trivy.

@@ -1,0 +1,28 @@
+# Gate de dependencias en los pull requests.
+# Revisa SOLO lo que el PR cambia en las dependencias (no lo que ya había en main):
+# si el PR agrega una dependencia con una vulnerabilidad HIGH o CRITICAL, el check falla,
+# deja un comentario en el PR con los CVE y, con la regla de protección de la rama main,
+# el merge queda bloqueado.
+name: PR Gate
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write   # para comentar el resumen en el PR
+
+jobs:
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Revisar las dependencias que agrega el PR
+        # Fijada por SHA y no por etiqueta: una etiqueta se puede mover, un commit no.
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: always

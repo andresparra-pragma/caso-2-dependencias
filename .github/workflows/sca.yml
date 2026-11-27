@@ -2,12 +2,12 @@
 #  - "versiones del repo"   → FALLA a propósito: las dependencias declaradas son vulnerables.
 #  - "versiones corregidas" → PASA: mismo proyecto con las versiones actualizadas.
 # Un job en rojo aquí no es un error del workflow: es el gate haciendo su trabajo.
-# Se corre a mano (Actions → SCA → Run workflow) y en los pull requests.
+# Se corre a mano (Actions → SCA → Run workflow). Los pull requests los revisa pr-gate.yml,
+# que solo mira las dependencias que el PR agrega.
 name: SCA
 
 on:
   workflow_dispatch:
-  pull_request:
 
 jobs:
   trivy-vulnerable:
