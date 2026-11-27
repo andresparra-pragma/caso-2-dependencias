@@ -63,8 +63,13 @@ Trivy lee las versiones por defecto del `pom.xml` (no activa perfiles): para ver
 [`.github/workflows/sca.yml`](.github/workflows/sca.yml) corre el mismo escaneo en el pipeline. Se ejecuta a mano
 (**Actions → SCA → Run workflow**) y en cada pull request:
 
-- **Trivy:** no necesita configuración. Falla a propósito, porque las dependencias de este repo son vulnerables: ese
-  es el punto de la demo.
-- **Dependency-Check:** necesita el secreto `NVD_API_KEY` en el repo (*Settings → Secrets and variables → Actions*).
+| Job | Resultado esperado | Por qué |
+|---|---|---|
+| Trivy · versiones del repo | ❌ falla | Encuentra Log4Shell y los demás hallazgos HIGH/CRITICAL: el gate detiene el pipeline. |
+| Trivy · versiones corregidas | ✅ pasa | Mismo proyecto con `log4j-core 2.26.1` y `spring-data-jpa 3.5.13`: 0 hallazgos. |
+| OWASP Dependency-Check | ❌ falla | CVSS ≥ 7. Solo corre a mano y necesita el secreto `NVD_API_KEY` (*Settings → Secrets and variables → Actions*). |
+
+**Un job en rojo aquí no es un error del workflow: es el gate haciendo su trabajo.** El par rojo/verde muestra el
+antes y el después de actualizar las dependencias.
 
 Requisitos para correrlo en local: **Java 17+** (el proyecto trae el Maven Wrapper) y, para la opción B, Trivy.

@@ -1,5 +1,7 @@
-# CI Gate de dependencias (SCA). Este repo declara dependencias vulnerables a propósito,
-# así que los dos jobs FALLAN: eso es justamente lo que demuestra la charla.
+# CI Gate de dependencias (SCA): el antes y el después.
+#  - "versiones del repo"   → FALLA a propósito: las dependencias declaradas son vulnerables.
+#  - "versiones corregidas" → PASA: mismo proyecto con las versiones actualizadas.
+# Un job en rojo aquí no es un error del workflow: es el gate haciendo su trabajo.
 # Se corre a mano (Actions → SCA → Run workflow) y en los pull requests.
 name: SCA
 
@@ -8,16 +10,38 @@ on:
   pull_request:
 
 jobs:
-  trivy:
-    name: Trivy (sin API key)
+  trivy-vulnerable:
+    name: "Trivy · versiones del repo (debe fallar ❌)"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Escanear dependencias (falla con HIGH o CRITICAL)
+      - name: Escanear dependencias (el gate falla con HIGH o CRITICAL)
         # Fijada por SHA y no por etiqueta: una etiqueta se puede mover, un commit no.
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          version: v0.76.2
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+  trivy-corregido:
+    name: "Trivy · versiones corregidas (debe pasar ✅)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Aplicar la corrección (las mismas versiones del perfil "corregido")
+        run: |
+          sed -i 's#<log4j.version>2.14.1#<log4j.version>2.26.1#; s#<spring-data-jpa.version>3.1.11#<spring-data-jpa.version>3.5.13#' pom.xml
+          grep -E "<(log4j|spring-data-jpa).version>" pom.xml | head -2
+
+      - name: Escanear dependencias (el gate pasa sin HIGH ni CRITICAL)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.2
           scan-type: fs
           scan-ref: .
           scanners: vuln
