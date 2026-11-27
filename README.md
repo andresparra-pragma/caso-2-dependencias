@@ -1,115 +1,104 @@
-# Caso 2 · Dependencias vulnerables + CI Gate
+# Caso 2: librerías con vulnerabilidades y un pipeline que las detiene
 
-Demo de la charla **"Tu código tiene vulnerabilidades, y tus dependencias también"** (PragmaTalk).
+Este proyecto es una de las demos de la charla "Tu código tiene vulnerabilidades, y tus dependencias también" (PragmaTalk). Muestra cómo una librería que usas puede traer una vulnerabilidad grave, cómo detectarla automáticamente y cómo evitar que entre al proyecto.
 
-Un proyecto **sin una sola línea de código propio malo**, pero con dependencias vulnerables. La idea: *no puedes arreglar
-lo que no sabes que tienes*. Un escáner de dependencias (SCA) las detecta y un **CI Gate** hace fallar el build.
+> **Importante:** este proyecto usa a propósito versiones viejas de librerías con vulnerabilidades conocidas. No copies estas versiones en ningún proyecto real.
 
-> ⚠️ **Proyecto solo para escanear.** Declara a propósito versiones con vulnerabilidades conocidas; no tiene código que
-> ejecute esas librerías. No reutilices estas versiones en ningún proyecto real.
+## Qué hay en este proyecto
 
-| Dependencia | Versión | Por qué está aquí |
-|---|---|---|
-| `org.apache.logging.log4j:log4j-core` | 2.14.1 | **Log4Shell** · CVE-2021-44228 · CVSS 10.0 |
-| `org.springframework.data:spring-data-jpa` | 3.1.11 | Trae CVE **heredados de dependencias transitivas** (por ejemplo, CVE-2025-41249 en `spring-core 6.0.19`) |
+No tiene código propio con errores. Solo usa dos librerías:
 
-## 1. El inventario
+- **log4j-core 2.14.1.** Tiene Log4Shell (CVE-2021-44228), una de las vulnerabilidades más graves de los últimos años: puntaje 10 sobre 10.
+- **spring-data-jpa 3.1.11.** Por sí sola no es el problema. Pero trae otra librería, spring-core 6.0.19, que sí tiene una vulnerabilidad (CVE-2025-41249).
 
-```bash
-./mvnw dependency:tree        # .\mvnw.cmd en Windows
-```
+Ese segundo caso es importante. Las librerías que usas traen otras librerías, que a su vez traen otras. A esas se les llama dependencias transitivas. Nadie escribió "spring-core 6.0.19" en este proyecto, y aun así está ahí.
 
-Muestra las dependencias directas y las **transitivas** que traen. Ahí se ve la *ubicación* de cada vulnerabilidad:
-`spring-core` nadie lo puso a mano, llega por `spring-data-jpa`.
+Un CVE es el número con el que se identifica públicamente una vulnerabilidad conocida. El puntaje (CVSS) va de 0 a 10: desde 7 se considera alta y desde 9, crítica.
 
-## 2. El escaneo y el CI Gate
+## Paso 1: saber qué librerías tienes
 
-### Opción A · OWASP Dependency-Check
-
-Requiere una API key gratuita de la NVD: <https://nvd.nist.gov/developers/request-an-api-key>.
-La primera ejecución descarga la base de CVE y puede tardar; después tarda segundos.
+No puedes arreglar lo que no sabes que tienes. Este comando muestra todas las librerías del proyecto, incluidas las que llegan de forma indirecta:
 
 ```bash
-./mvnw dependency-check:check -DnvdApiKey=TU_KEY
+./mvnw dependency:tree        # en Windows: .\mvnw.cmd dependency:tree
 ```
 
-El umbral del gate está en el `pom.xml` (`failBuildOnCVSS=7`): con hallazgos de CVSS ≥ 7 el build termina en
-**BUILD FAILURE**. Reporte en `target/dependency-check-report.html`. Se puede cambiar con `-DfailBuildOnCVSS=N`.
+## Paso 2: buscar vulnerabilidades
 
-### Opción B · Trivy (sin API key)
+Hay herramientas que revisan cada librería contra bases de datos públicas de vulnerabilidades. Aquí van dos.
+
+**Con Trivy** (la más sencilla, no pide registro):
 
 ```bash
 trivy fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 .
 ```
 
-Resultado (noviembre de 2026): **4 hallazgos HIGH/CRITICAL**, entre ellos CVE-2021-44228 (Log4Shell) en
-`log4j-core 2.14.1` y CVE-2025-41249 en `spring-core 6.0.19`. El comando termina con **código de salida 1**: para un
-pipeline, eso es rojo.
+Encuentra 4 vulnerabilidades altas o críticas, entre ellas Log4Shell en log4j-core y la de spring-core. El comando termina con código 1. Para un pipeline, eso significa "detente": el paso falla y el cambio no avanza.
 
-## 3. La corrección: actualizar
-
-El perfil `corregido` sube las versiones (`log4j-core 2.26.1`, `spring-data-jpa 3.5.13`):
+**Con OWASP Dependency-Check:**
 
 ```bash
-./mvnw -Pcorregido dependency:tree
+./mvnw dependency-check:check -DnvdApiKey=TU_KEY
+```
+
+Necesita una clave gratuita de la NVD, la base de datos de vulnerabilidades del gobierno de Estados Unidos. Se pide aquí: <https://nvd.nist.gov/developers/request-an-api-key>. La primera vez descarga toda la base y tarda un rato; las siguientes tardan segundos.
+
+El proyecto está configurado para fallar si encuentra algo con puntaje 7 o más (`failBuildOnCVSS` en el `pom.xml`). El detalle queda en `target/dependency-check-report.html`.
+
+## Paso 3: corregir
+
+La solución casi siempre es la misma: actualizar a una versión sin el problema. El proyecto trae un perfil llamado `corregido` con log4j-core 2.26.1 y spring-data-jpa 3.5.13:
+
+```bash
 ./mvnw -Pcorregido dependency-check:check -DnvdApiKey=TU_KEY
 ```
 
-Trivy lee las versiones por defecto del `pom.xml` (no activa perfiles): para ver la corrección con Trivy, cambia
-`log4j.version` y `spring-data-jpa.version` en `<properties>`. Con esas versiones: **0 hallazgos**.
+Con esas versiones no aparece ninguna vulnerabilidad alta ni crítica. Al actualizar spring-data-jpa también llega una versión nueva de spring-core, y por eso desaparece la vulnerabilidad indirecta.
 
-## 4. El gate en GitHub Actions
+Trivy no lee los perfiles de Maven. Para ver la corrección con Trivy, cambia `log4j.version` y `spring-data-jpa.version` en la sección `<properties>` del `pom.xml`.
 
-[`.github/workflows/sca.yml`](.github/workflows/sca.yml) corre el mismo escaneo en el pipeline. Se ejecuta a mano
-(**Actions → SCA → Run workflow**):
+## En GitHub: revisiones automáticas
 
-| Job | Resultado esperado | Por qué |
-|---|---|---|
-| Trivy · versiones del repo | ❌ falla | Encuentra Log4Shell y los demás hallazgos HIGH/CRITICAL: el gate detiene el pipeline. |
-| Trivy · versiones corregidas | ✅ pasa | Mismo proyecto con `log4j-core 2.26.1` y `spring-data-jpa 3.5.13`: 0 hallazgos. |
-| Fluid Attacks SCA | ❌ falla | Escáner open source de [Fluid Attacks](https://github.com/fluidattacks/sca-action), sin cuenta ni API key. Publica los hallazgos en la pestaña **Security → Code scanning**. |
-| OWASP Dependency-Check | ❌ falla | CVSS ≥ 7. Necesita el secreto `NVD_API_KEY` (*Settings → Secrets and variables → Actions*). |
+Lo útil no es correr estas herramientas a mano un día, sino que corran solas en cada cambio. El repositorio tiene dos flujos en GitHub Actions.
 
-**Un job en rojo aquí no es un error del workflow: es el gate haciendo su trabajo.** El par rojo/verde muestra el
-antes y el después de actualizar las dependencias.
+### Revisión completa (se corre a mano)
 
-Sobre Fluid Attacks: en la versión 1.2.0, `fluidattacks/sca-action` **reporta pero no hace fallar el job**. Con
-`strict: true` en [`.github/fluid-sca.yaml`](.github/fluid-sca.yaml) el escáner marca el output `vulnerabilities_found`,
-y un paso explícito del workflow lo convierte en el gate. La acción corre sin autenticar: no está conectada a ningún
-grupo de la plataforma de Fluid Attacks.
+Está en [`.github/workflows/sca.yml`](.github/workflows/sca.yml). Se lanza desde **Actions**, en "SCA", con el botón **Run workflow**. Tiene cuatro pasos:
 
-## 5. El gate en un pull request: no se puede hacer merge
+1. **Trivy con las versiones del repositorio.** Falla, porque las librerías tienen vulnerabilidades.
+2. **Trivy con las versiones corregidas.** Pasa. Así se ve el antes y el después.
+3. **Fluid Attacks.** Usa la herramienta gratuita de [Fluid Attacks](https://github.com/fluidattacks/sca-action), que no pide cuenta. Falla y publica lo que encontró en la pestaña **Security**, en "Code scanning".
+4. **OWASP Dependency-Check.** Falla. Para que funcione hay que guardar la clave de la NVD como secreto del repositorio, con el nombre `NVD_API_KEY` (Settings, luego Secrets and variables, luego Actions).
 
-[`.github/workflows/pr-gate.yml`](.github/workflows/pr-gate.yml) corre **Dependency Review** de GitHub en cada PR
-hacia `main`. Revisa **solo las dependencias que el PR agrega o cambia** (no lo que ya había en `main`): si alguna
-tiene una vulnerabilidad HIGH o CRITICAL, el check falla y deja un comentario en el PR con los CVE.
+Que estos pasos salgan en rojo es buena señal: significa que el control funciona.
 
-### Configuración (una sola vez, en GitHub)
+Un detalle sobre Fluid Attacks: en la versión usada aquí (1.2.0), la herramienta avisa que encontró vulnerabilidades, pero no hace fallar el paso por sí sola. Por eso el flujo tiene un paso extra que revisa el resultado y falla si hubo hallazgos.
 
-1. El repo debe ser **público**. En repos privados, Dependency Review necesita GitHub Advanced Security, y las reglas
-   de protección de rama necesitan un plan pago.
-2. Verifica que el **dependency graph** esté activo: *Settings → Code security → Dependency graph*. En los repos
-   públicos viene activo.
-3. Abre un primer PR (el de abajo) para que el check **Dependency Review** aparezca al menos una vez.
-4. Protege `main`: *Settings → Branches → Add branch ruleset* (o *Add classic branch protection rule*) →
-   *Require status checks to pass* → agrega **Dependency Review**. Desde ahí, un PR con ese check en rojo no se puede
-   mergear.
+### Revisión de cada pull request
 
-### La prueba: rama `feature/plantillas-notificaciones`
+Está en [`.github/workflows/pr-gate.yml`](.github/workflows/pr-gate.yml) y usa Dependency Review, de GitHub. Corre sola en cada pull request y revisa solo las librerías que ese cambio agrega o modifica. Si alguna tiene una vulnerabilidad alta o crítica, la revisión falla y deja un comentario en el pull request explicando cuál es.
 
-La rama agrega una funcionalidad real (plantillas para las notificaciones a los afiliados) que usa
-`org.apache.commons:commons-text` **1.9**. Esa versión tiene **Text4Shell (CVE-2022-42889, CVSS 9.8)**: igual que
-Log4Shell, una interpolación de texto que puede terminar ejecutando código.
+Que revise solo lo nuevo es clave. Este repositorio ya tiene Log4Shell en la rama principal; si la revisión mirara todo, fallaría en cualquier cambio y la gente aprendería a ignorarla. Así, cada cambio responde solo por lo que agrega.
 
-```bash
-git push -u origin feature/plantillas-notificaciones
-```
+## Pruébalo con un pull request
 
-En GitHub, abre el PR hacia `main`:
+La rama `feature/plantillas-notificaciones` agrega una funcionalidad sencilla: plantillas para los mensajes que se envían a los afiliados. Para hacerlo usa la librería commons-text en su versión 1.9, que tiene Text4Shell (CVE-2022-42889, puntaje 9.8). Es un problema parecido a Log4Shell.
 
-1. **Dependency Review** falla ❌ y comenta en el PR: `commons-text 1.9` → CVE-2022-42889 (critical).
-2. El botón de merge queda bloqueado por la regla de la rama.
-3. La corrección, en la misma rama: cambia la versión a `1.15.0` en el `pom.xml`, haz commit y push.
-4. El check vuelve a correr, pasa ✅ y el merge se habilita.
+Al abrir un pull request de esa rama hacia `main`:
 
-Requisitos para correrlo en local: **Java 17+** (el proyecto trae el Maven Wrapper) y, para la opción B, Trivy.
+1. La revisión "Dependency Review" falla.
+2. Aparece un comentario en el pull request: una librería vulnerable, commons-text 1.9, ejecución de código arbitrario, crítica.
+3. Si la rama `main` tiene la regla que exige pasar esa revisión, el botón para unir los cambios queda bloqueado.
+
+La corrección es cambiar la versión a 1.15.0 en la misma rama. La revisión pasa y el pull request ya se puede unir.
+
+Para que esto funcione en tu copia del repositorio hay que activar tres cosas una sola vez:
+
+1. **Dependency graph** encendido, en Settings, luego Code security. Sin esto la revisión falla con el mensaje "Dependency review is not supported on this repository".
+2. Una regla en la rama `main` que exija pasar la revisión "Dependency Review", en Settings, luego Branches. Esa revisión aparece en la lista después de haber corrido al menos una vez.
+3. El repositorio debe ser público. En uno privado, Dependency Review y las reglas de rama necesitan planes de pago.
+
+## Qué necesitas
+
+- Java 17 o más nuevo. No hace falta instalar Maven: el proyecto ya trae lo necesario.
+- Trivy, si quieres la opción que no pide registro.
